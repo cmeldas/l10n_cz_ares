@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form" model="ir.ui.view">
+        <field name="name">res.partner.form.l10n_cz_ares</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <!-- Nový kontakt nebo firma bez IČO: pole IČO pod firmou, po zadání doplní údaje z ARES. -->
+            <xpath expr="//field[@name='parent_id']/.." position="after">
+                <field name="l10n_cz_ares_show_lookup" invisible="1"/>
+                <field name="l10n_cz_ares_pending_accounts" invisible="1"/>
+                <field name="country_code" invisible="1"/>
+                <label for="l10n_cz_ares_ico" class="d-md-none"
+                       invisible="not l10n_cz_ares_show_lookup or (country_code and country_code != 'CZ')"/>
+                <div class="d-flex align-items-baseline w-md-50 gap-2"
+                     invisible="not l10n_cz_ares_show_lookup or (country_code and country_code != 'CZ')">
+                    <i class="oi d-none d-md-inline-flex" data-icon="search" title="IČO z ARES"/>
+                    <field name="l10n_cz_ares_ico" placeholder="IČO – doplní údaje z ARES"/>
+                </div>
+            </xpath>
+            <!-- Uložená firma: aktualizace z ARES pod identifikátory (IČO, DIČ). -->
+            <xpath expr="//div[@name='identifiers']" position="inside">
+                <button name="action_l10n_cz_ares_update" type="object" icon="refresh"
+                        string="Aktualizovat z ARES" class="btn btn-link px-0" colspan="2"
+                        help="Přepíše název, adresu a DIČ podle ARES, přidá chybějící zveřejněné bankovní účty; změny zapíše do chatteru."
+                        invisible="not id or parent_id or (country_code and country_code != 'CZ')"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_partner_ares_update" model="ir.actions.server">
+        <field name="name">Aktualizovat z ARES</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_l10n_cz_ares_update()</field>
+    </record>
+</odoo>
