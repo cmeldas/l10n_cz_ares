@@ -386,7 +386,7 @@ class ResPartner(models.Model):
         return accounts
 
     def _l10n_cz_ares_bank_values(self, account):
-        bank_name, bic = ares.czech_bank(account["iban"])
+        bank_name, bic = ares.czech_bank(account["iban"], self.env["l10n_cz_ares.bank.codes"]._get_banks())
         note = f"Zveřejněný účet v registru plátců DPH od {_format_date(account['published_on'])}"
         if account["domestic"]:
             note += f" ({account['domestic']})"

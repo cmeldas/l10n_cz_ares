@@ -82,9 +82,14 @@ V Odoo 20 je to počítané pole: firma je, kdo má DIČ.
   `https://adisrws.mfcr.cz/dpr/axis2/services/rozhraniCRPDPH.rozhraniCRPDPHSOAP`, dává stav
   spolehlivosti a zveřejněné účty (standardní předčíslí-číslo/kód, nestandardní jako IBAN).
 - Volání mají timeout 10 s, bez přihlášení. Na jedno IČO jdou tři dotazy (ARES, RES, registr DPH).
-- `data/cnb_bank_codes.csv`: kódy bank ČNB (kód, název, BIC), stažené 9. 11. 2026 z
+- Název a BIC banky podle kódu banky ze seznamu ČNB
   `https://www.cnb.cz/cs/platebni-styk/.galleries/ucty_kody_bank/download/kody_bank_CR.csv`.
-  Neznámý kód banky nevadí, účet se založí bez názvu banky.
+  Naplánovaná akce **ARES: stáhnout kódy bank od ČNB** ho stahuje jednou za měsíc (poprvé hned po
+  instalaci) a ukládá do systémových parametrů `l10n_cz_ares.cnb_bank_codes` a `…_updated` (čas
+  stažení). Když ČNB neodpoví nebo soubor nevypadá jako seznam bank (méně než 20 kódů, chybí
+  hlavička), zůstane předchozí seznam. Dokud se nic nestáhne, platí `data/cnb_bank_codes.csv`
+  přibalený v modulu (stav 9. 11. 2026). Názvy bank u už založených účtů se nemění. Neznámý kód
+  banky nevadí, účet se založí bez názvu banky.
 - Čisté funkce pro registry jsou v `tools/ares.py`, napojení na kontakt v `models/res_partner.py`,
   okno s výběrem účtů v `wizard/ares_bank_wizard.py` (dočasné modely `l10n_cz_ares.bank.wizard`
   a `.line`, právo pro interní uživatele). Jediný účet z doplnění ve formuláři čeká v pomocném poli

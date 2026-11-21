@@ -16,6 +16,8 @@ from odoo.tools import file_open
 ARES_URL = "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest"
 VAT_REGISTRY_URL = "https://adisrws.mfcr.cz/dpr/axis2/services/rozhraniCRPDPH.rozhraniCRPDPHSOAP"
 VAT_REGISTRY_NS = "http://adis.mfcr.cz/rozhraniCRPDPH/"
+CNB_BANK_CODES_URL = "https://www.cnb.cz/cs/platebni-styk/.galleries/ucty_kody_bank/download/kody_bank_CR.csv"
+MIN_BANK_CODES = 20  # v listopadu 2026 jich ČNB vede 47; méně znamená rozbitý soubor
 TIMEOUT = 10
 USER_AGENT = "Odoo l10n_cz_ares"
 EVIDENCE_NUMBER_TYPE = 2  # typCisloDomovni: 1 = číslo popisné, 2 = číslo evidenční
@@ -306,14 +308,45 @@ def comparable_account(account_number: str | None) -> str:
 
 
 @functools.cache
-def czech_banks() -> dict:
-    """Kódy bank ČNB: {kód: (název, BIC)} ze souboru data/cnb_bank_codes.csv."""
+def bundled_czech_banks() -> dict:
+    """Kódy bank ČNB přibalené v modulu (data/cnb_bank_codes.csv): {kód: (název, BIC)}."""
     with file_open("l10n_cz_ares/data/cnb_bank_codes.csv") as file:
         return {row["code"]: (row["name"], row["bic"] or None) for row in csv.DictReader(file, delimiter=";")}
 
 
-def czech_bank(iban: str) -> tuple[str | None, str | None]:
-    """Název a BIC banky českého IBAN podle kódu banky, jinak (None, None)."""
+def parse_bank_codes(text: str) -> dict:
+    """Seznam kódů bank z CSV ČNB (kód;název;BIC;CERTIS, první řádek hlavička): {kód: (název, BIC)}.
+
+    :raises RegistryError: když soubor nevypadá jako seznam ČNB (změna formátu, chybová stránka)
+    """
+    rows = list(csv.reader(text.lstrip("﻿").splitlines(), delimiter=";"))
+    banks = {
+        row[0].strip(): (row[1].strip(), row[2].strip() or None)
+        for row in rows[1:]
+        if len(row) >= 3 and re.fullmatch(r"\d{4}", row[0].strip()) and row[1].strip()
+    }
+    if not rows or "kód" not in rows[0][0].lower() or len(banks) < MIN_BANK_CODES:
+        raise RegistryError("Seznam kódů bank od ČNB má nečekaný tvar, zůstává předchozí.")
+    return banks
+
+
+def fetch_czech_banks() -> dict:
+    """Aktuální seznam kódů bank od ČNB: {kód: (název, BIC)}."""
+    response = _request("GET", CNB_BANK_CODES_URL)
+    if response.status_code != 200:
+        raise RegistryError(f"ČNB vrátila chybu {response.status_code}.")
+    try:
+        text = response.content.decode("utf-8-sig")
+    except UnicodeDecodeError:  # dřív ČNB dávala soubory ve windows-1250
+        text = response.content.decode("cp1250")
+    return parse_bank_codes(text)
+
+
+def czech_bank(iban: str, banks: dict | None = None) -> tuple[str | None, str | None]:
+    """Název a BIC banky českého IBAN podle kódu banky, jinak (None, None).
+
+    :param banks: seznam kódů bank {kód: (název, BIC)}; bez něj ten přibalený v modulu
+    """
     if not iban.startswith("CZ") or len(iban) != 24:
         return None, None
-    return czech_banks().get(iban[4:8], (None, None))
+    return (banks or bundled_czech_banks()).get(iban[4:8], (None, None))

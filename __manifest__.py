@@ -13,8 +13,9 @@ bankovní účet. Uloží se až s kontaktem. Když je zveřejněných účtů v
 U uloženého kontaktu je tlačítko **Aktualizovat z ARES** a v seznamu kontaktů akce
 stejného jména: přepíše údaje podle registrů a změny zapíše do chatteru (staré → nové).
 Jeden chybějící zveřejněný účet přidá rovnou, když jich je víc, nabídne okno s výběrem.
+Název a BIC banky bere ze seznamu kódů bank ČNB, který jednou za měsíc stahuje.
 """,
-    "version": "20.0.1.0.0",
+    "version": "20.0.1.1.0",
     "category": "Localization",
     "countries": ["cz"],
     "author": "Matouš Čmelík",
@@ -23,6 +24,7 @@ Jeden chybějící zveřejněný účet přidá rovnou, když jich je víc, nab�
     "depends": ["mail"],
     "data": [
         "security/ir.access.csv",
+        "data/ir_cron.xml",
         "views/res_partner_views.xml",
         "wizard/ares_bank_wizard_views.xml",
     ],

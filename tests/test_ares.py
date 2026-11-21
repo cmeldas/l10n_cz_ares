@@ -383,3 +383,54 @@ class TestAresPartner(TransactionCase):
         person = self.env["res.partner"].create({"name": "Osoba", "parent_id": company.id})
         with self.assertRaises(UserError):
             person.action_l10n_cz_ares_update()
+
+
+CNB_CSV = (
+    "﻿Kód platebního styku;Poskytovatel platebních služeb;BIC kód (SWIFT);Systém CERTIS\r\n"
+    + "".join(f"{1000 + i:04d};Banka {i}, a.s.;BANKCZ{i:02d};A\r\n" for i in range(25))
+    + "0100;Komerční banka nově, a.s.;KOMBCZPP;A\r\n"
+    + "7990;Stavební spořitelna bez BIC, a.s.;;\r\n"
+)
+
+
+@tagged("post_install", "-at_install")
+class TestBankCodes(TransactionCase):
+    def setUp(self):
+        super().setUp()
+        self.env["ir.config_parameter"].sudo().set_str("l10n_cz_ares.cnb_bank_codes", False)
+        self.codes = self.env["l10n_cz_ares.bank.codes"]
+
+    def kb_bank_name(self):
+        account = {"iban": KB_IBAN, "domestic": None, "published_on": "2013-04-01"}
+        return self.env["res.partner"]._l10n_cz_ares_bank_values(account)["bank_name"]
+
+    def test_parse(self):
+        banks = ares.parse_bank_codes(CNB_CSV)
+        self.assertEqual(banks["0100"], ("Komerční banka nově, a.s.", "KOMBCZPP"))
+        self.assertEqual(banks["7990"], ("Stavební spořitelna bez BIC, a.s.", None))
+        self.assertEqual(len(banks), 27)
+        with self.assertRaises(ares.RegistryError):
+            ares.parse_bank_codes("<html>Stránka nenalezena</html>")
+        with self.assertRaises(ares.RegistryError):
+            ares.parse_bank_codes(CNB_CSV.splitlines()[0] + "\n0100;Komerční banka, a.s.;KOMBCZPP;A\n")
+
+    def test_cron_downloads_and_keeps_previous_on_error(self):
+        self.assertEqual(self.kb_bank_name(), "Komerční banka, a.s.")  # přibalený seznam
+        with patch.object(ares, "_request", return_value=FakeResponse(200, content=CNB_CSV.encode("utf-8"))):
+            self.assertTrue(self.codes._cron_update())
+        self.assertEqual(self.kb_bank_name(), "Komerční banka nově, a.s.")
+        self.assertTrue(self.env["ir.config_parameter"].sudo().get_str("l10n_cz_ares.cnb_bank_codes_updated"))
+        for response in (FakeResponse(200, content=b"<html>chyba</html>"), FakeResponse(503)):
+            with patch.object(ares, "_request", return_value=response):
+                self.assertFalse(self.codes._cron_update())
+        self.assertEqual(self.kb_bank_name(), "Komerční banka nově, a.s.")
+
+    def test_cron_reads_windows_1250(self):
+        content = CNB_CSV.lstrip("﻿").encode("cp1250")
+        with patch.object(ares, "_request", return_value=FakeResponse(200, content=content)):
+            self.assertTrue(self.codes._cron_update())
+        self.assertEqual(self.codes._get_banks()["0100"][0], "Komerční banka nově, a.s.")
+
+    def test_cron_record(self):
+        cron = self.env.ref("l10n_cz_ares.ir_cron_update_bank_codes")
+        self.assertEqual((cron.interval_number, cron.interval_type, cron.active), (1, "months", True))
